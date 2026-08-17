@@ -1,4 +1,6 @@
 # Dev/CI dependencies, not shipped to the runtime image.
 -r requirements.txt
 pytest==8.3.3
+pytest-cov==5.0.0
 httpx==0.28.1
+
