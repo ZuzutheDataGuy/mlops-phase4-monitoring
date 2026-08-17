@@ -1,0 +1,19 @@
+# prometheus.yml
+# Scrapes the ML serving API's /metrics endpoint so Grafana can chart
+# ML-specific operational metrics.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'ml-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api:8000']
+        labels:
+          service: 'fraud-serving-api'
+
+  # Prometheus scraping itself (useful for debugging the stack).
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

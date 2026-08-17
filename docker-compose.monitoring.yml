@@ -1,0 +1,53 @@
+# docker-compose.monitoring.yml
+# Spins up the full monitoring stack: the instrumented ML API, Prometheus
+# (scraping /metrics), and Grafana (pre-provisioned with the ML dashboard).
+#
+#   docker-compose -f docker-compose.monitoring.yml up -d
+#
+# Grafana:    http://localhost:3000  (admin / admin)
+# Prometheus: http://localhost:9090
+services:
+  api:
+    build: .
+    image: mlops-phase4-monitoring
+    container_name: fraud-serving-api
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_PATH: "models/fraud_model.joblib"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped

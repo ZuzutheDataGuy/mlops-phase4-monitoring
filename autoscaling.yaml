@@ -1,0 +1,63 @@
+# autoscaling.yaml
+# Horizontal Pod Autoscaler for the ML serving API. Scales pods between a
+# minimum and maximum bound based on CPU utilisation (and, optionally, a
+# custom requests-per-second metric) so the service holds its latency SLA
+# during traffic spikes without over-provisioning at idle.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ml-api-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ml-api-deployment
+  # Bounded scaling: never fewer than 2 (HA) or more than 10 (cost ceiling).
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    # Primary signal: CPU utilisation.
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Secondary signal: memory, to catch model-memory pressure.
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metric: requests per second per pod (requires a metrics adapter,
+    # e.g. Prometheus Adapter). Keeps latency in check under request spikes
+    # even when CPU hasn't yet saturated.
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "50"
+  # Tuned scaling behaviour: scale up fast to protect the SLA, scale down slowly
+  # to avoid thrashing on brief lulls.
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 4
+          periodSeconds: 30
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+      selectPolicy: Min
